@@ -34,6 +34,7 @@ class KDCLoginHandler(BaseHandler):
 
     @gen.coroutine
     def get(self):
+        self.log.info("KDCLoginHandler get")
         redirect_uri = self.authenticator.callback_url(self.base_url)
         self.redirect(redirect_uri)
 
@@ -44,11 +45,13 @@ class KDCCallbackHandler(BaseHandler):
         '''
         Indicate that authentication is required
         '''
+        self.log.info("unauthorized")
         self.set_status(401)
         self.set_header('WWW-Authenticate','Negotiate')
         self.finish()
 
     def _stop(self, username):
+        self.log.info("stop")
         html = self._render(
             login_error='Invalid credential',
             username=username,
@@ -65,17 +68,20 @@ class KDCCallbackHandler(BaseHandler):
     def get(self):
 
         header = self.request.headers.get("Authorization")
+        self.log.info("Authorization Header " + str(header))
         if header:
             token = ''.join(header.split()[1:])
             result = yield self.authenticator.get_authenticated_user(self, token)
-
+            self.log.info("result from get_authenticated_user " + str(result))
             username = None
+            if result:
+                result = result['name']
             rc = None
             if ":" in result:
                 rc, username = result.split(':')
             elif result != None:
                 rc = result
-
+            self.log.info("rc " + str(rc))
             if rc.upper() == "KERBEROS.AUTH_GSS_COMPLETE":
                 self.log.info("kerberos.AUTH_GSS_COMPLETE: Username= " + username)
                 if username:
@@ -110,23 +116,29 @@ class KDCAuthenticator(LocalAuthenticator):
     Kerberos Authenticator for JupyterHub
     """
 
-    service_name = Unicode('HTTP',
-                             help="This is a service principal"
-                             ).tag(config=True)
-
+#    service_name = Unicode('HTTP',
+#                             help="This is a service principal"
+#                             ).tag(config=True)
+    service_name = 'HTTP'
     def callback_url(self, base_url):
+        self.log.info("request callback_url " + base_url)
         return url_path_join(base_url, 'kdc_callback')
 
     def login_url(self, base_url):
+        self.log.info("request login_url " + str(base_url))
         return url_path_join(base_url, 'kdc_login')
 
     login_handler = KDCLoginHandler
     callback_handler = KDCCallbackHandler
 
     def get_handlers(self, app):
+        self.log.info("request get_handlers " + str(dir(app)))
+
         return [
             (r'/kdc_login', self.login_handler),
+            (r'/login', self.login_handler),
             (r'/kdc_callback', self.callback_handler),
+            (r'/callback', self.callback_handler)
         ]
 
     @gen.coroutine
@@ -140,6 +152,9 @@ class KDCAuthenticator(LocalAuthenticator):
             '''
         state = None
         try:
+            self.log.info("try to authenticate to " + self.service_name)
+            self.log.info("handler " + str(handler))
+            self.log.info("data " + str(data))
             rc, state = kerberos.authGSSServerInit(self.service_name)
             self.log.info("kerberos.authGSSServerInit")
             if rc != kerberos.AUTH_GSS_COMPLETE:
