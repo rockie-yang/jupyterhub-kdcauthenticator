@@ -74,6 +74,10 @@ class KDCCallbackHandler(BaseHandler):
             result = yield self.authenticator.get_authenticated_user(self, token)
             self.log.info("result from get_authenticated_user " + str(result))
             username = None
+            if not result:
+                self._unauthorized()
+                return
+                
             if result and type(result) == dict:
                 result = result['name']
 
